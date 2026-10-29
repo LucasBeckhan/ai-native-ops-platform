@@ -1,0 +1,32 @@
+# =====================================================================
+# 文件名: docker/docker-compose.spark-driver.yml
+# 说明: PySpark 驱动容器（与 docker-compose.spark.yml 一起启动）。
+# 用法: docker compose -f docker-compose.spark.yml -f docker-compose.spark-driver.yml \
+#         up -d --build
+#       docker exec spark-driver submit jobs/offline_attack_analysis.py
+# =====================================================================
+name: ai-native-ops
+
+services:
+  spark-driver:
+    build:
+      context: ..
+      dockerfile: docker/spark-driver/Dockerfile
+    image: teleops/spark-driver:3.5.5
+    container_name: spark-driver
+    stdin_open: true
+    tty: true
+    environment:
+      SPARK_MASTER_URL: spark://spark-master:7077
+    volumes:
+      - ../bigdata/spark/jobs:/opt/spark/work-dir/jobs
+      - ../bigdata/spark/jars:/opt/spark/work-dir/jars
+      - ../bigdata/spark/data:/opt/spark/work-dir/data
+    mem_limit: 1200m
+    networks:
+      - teleops
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

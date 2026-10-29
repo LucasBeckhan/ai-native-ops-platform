@@ -1,0 +1,11 @@
+{
+  "name": "alarm-analysis",
+  "version": "1.0.0",
+  "description": "网络告警分析：查询设备告警 → 必要时运行诊断 → 生成根因假设与处置建议报告",
+  "triggers": ["告警", "故障", "退服", "异常", "中断"],
+  "permissions": ["read"],
+  "tools": ["query_alarms", "run_diagnosis"],
+  "author": "teleops",
+  "输入": "用户问题中包含设备ID（eNB-xxxx）或无设备（查全部）",
+  "输出": "结构化运维报告（Markdown）"
+}

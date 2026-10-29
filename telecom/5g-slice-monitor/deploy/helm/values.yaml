@@ -1,0 +1,25 @@
+# =====================================================================
+# 文件名: telecom/5g-slice-monitor/deploy/helm/values.yaml
+# 说明: Chart 默认值。多环境管理（dev/staging/prod）用 -f values-prod.yaml
+#       覆盖；与 Kustomize 层叠策略的对比见模块 7 文档。
+# =====================================================================
+kafkaBootstrap: kafka-1:9092,kafka-2:9092,kafka-3:9092
+esBulkUrl: http://elasticsearch:9200/_bulk
+
+flink:
+  image: teleops/flink-kpi-alert:1.0.0
+  jobmanager:
+    resources: {requests: {cpu: 500m, memory: 768Mi}, limits: {cpu: "1", memory: 1Gi}}
+  taskmanager:
+    replicas: 2
+    slots: 2
+    resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {cpu: "1", memory: 1536Mi}}
+
+generator:
+  image: teleops/kpi-generator:1.0.0
+  args: ["--interval", "0.2", "--scenario", "normal"]
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 6
+    cpuTarget: 60

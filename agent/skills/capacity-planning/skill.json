@@ -1,0 +1,9 @@
+{
+  "name": "capacity-planning",
+  "version": "1.0.0",
+  "description": "容量规划：拉取切片 KPI 趋势 → 对照容量水位（负载率）→ 输出扩容建议与风险预警",
+  "triggers": ["容量", "扩容", "负载率", "水位", "规划"],
+  "permissions": ["read"],
+  "tools": ["query_kpis", "es_query_alerts"],
+  "author": "teleops"
+}

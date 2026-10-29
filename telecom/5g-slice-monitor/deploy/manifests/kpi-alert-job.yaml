@@ -1,0 +1,113 @@
+# =====================================================================
+# 文件名: telecom/5g-slice-monitor/deploy/manifests/kpi-alert-job.yaml
+# 说明: 场景一在 K8s 上的部署清单（kind/minikube 可直接 apply）。
+#       Flink 作业以 Application 模式运行（作业镜像=运行时镜像，
+#       生产主流；会话集群模式见模块 18 文档 1 节的对比）。
+#       HPA 演示放在同目录 hpa.yaml——对数据生成器做自动扩缩。
+# =====================================================================
+# ---- ConfigMap：Flink 作业配置 ----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flink-kpi-alert-conf
+  namespace: teleops
+data:
+  BOOTSTRAP: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+  ES_URL: "http://elasticsearch:9200/_bulk"
+---
+# ---- Flink Application 集群（JobManager + TaskManager Deployment）----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-kpi-alert-jm
+  namespace: teleops
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: flink-kpi-alert, role: jobmanager}
+  template:
+    metadata:
+      labels: {app: flink-kpi-alert, role: jobmanager}
+    spec:
+      containers:
+        - name: jobmanager
+          # 生产镜像 = 基础镜像 + 作业 jar（场景一的 CI 产物，构建脚本见 scripts/）
+          image: teleops/flink-kpi-alert:1.0.0
+          command: ["/opt/flink/bin/standalone-job.sh", "start-foreground"]
+          args: ["--job-classname", "com.teleops.flink.m19.KafkaKpiAlertJob"]
+          ports:
+            - containerPort: 8081
+              name: ui
+          envFrom:
+            - configMapRef: {name: flink-kpi-alert-conf}
+          resources:
+            requests: {cpu: "500m", memory: "768Mi"}
+            limits: {cpu: "1", memory: "1Gi"}
+          readinessProbe:
+            httpGet: {path: /, port: 8081}
+            initialDelaySeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-kpi-alert-jm
+  namespace: teleops
+spec:
+  selector: {app: flink-kpi-alert, role: jobmanager}
+  ports:
+    - port: 8081
+      name: ui
+    - port: 6123
+      name: rpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-kpi-alert-tm
+  namespace: teleops
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: flink-kpi-alert, role: taskmanager}
+  template:
+    metadata:
+      labels: {app: flink-kpi-alert, role: taskmanager}
+    spec:
+      containers:
+        - name: taskmanager
+          image: teleops/flink-kpi-alert:1.0.0
+          command: ["/opt/flink/bin/taskmanager.sh", "start-foreground"]
+          env:
+            - name: FLINK_PROPERTIES
+              value: |
+                jobmanager.rpc.address: flink-kpi-alert-jm
+                taskmanager.numberOfTaskSlots: 2
+          resources:
+            requests: {cpu: "500m", memory: "1Gi"}
+            limits: {cpu: "1", memory: "1536Mi"}
+---
+# ---- kpi_generator：被 HPA 管理的"流量源"（模拟节假日话务洪峰）----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kpi-generator
+  namespace: teleops
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: kpi-generator}
+  template:
+    metadata:
+      labels: {app: kpi-generator}
+    spec:
+      containers:
+        - name: generator
+          image: teleops/kpi-generator:1.0.0
+          # 容器镜像 = python slim + confluent-kafka + 本脚本（构建见 scripts/）
+          args: ["--interval", "0.2", "--scenario", "normal"]
+          env:
+            - name: BOOTSTRAP
+              value: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+          resources:
+            requests: {cpu: "100m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}

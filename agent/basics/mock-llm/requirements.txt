@@ -1,0 +1,10 @@
+# =====================================================================
+# 文件名: agent/basics/mock-llm/requirements.txt
+# 说明: Mock LLM Server 依赖。全部为生产主流库：
+#   fastapi —— Python 生态最主流的 API 框架（类型安全 + 自动文档）
+#   uvicorn —— ASGI 服务器，支撑 SSE 流式响应
+#   prometheus-client —— 标准指标暴露库
+# =====================================================================
+fastapi==0.111.0
+uvicorn==0.30.1
+prometheus-client==0.20.0

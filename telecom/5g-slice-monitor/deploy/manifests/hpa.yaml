@@ -1,0 +1,39 @@
+# =====================================================================
+# 文件名: telecom/5g-slice-monitor/deploy/manifests/hpa.yaml
+# 说明: 场景一的 HPA 弹性伸缩——对"数据生成器"按 CPU 自动扩缩，
+#       模拟"节假日流量激增 → 采集端自动扩容"（模块 10 的场景化落地）。
+#       注意：Flink 作业本身不做 HPA（有状态流作业扩缩要 Savepoint 迁移，
+#       模块 10 文档讲 KEDA 按 Kafka Lag 伸缩消费者的生产方案）。
+# =====================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kpi-generator-hpa
+  namespace: teleops
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kpi-generator
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60    # CPU 超 60% 扩容（生成器是纯 CPU 型负载）
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30   # 30s 稳定窗口防抖动（模块 10 的抖动治理）
+      policies:
+        - type: Percent
+          value: 100                   # 每次最多翻倍
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 缩容更保守：5 分钟窗口
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60

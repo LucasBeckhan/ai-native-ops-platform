@@ -1,0 +1,7 @@
+# =====================================================================
+# 文件名: bigdata/kafka/src/requirements.txt
+# 说明: 模块 16/17 Python 客户端依赖。
+#   confluent-kafka 是 librdkafka 的官方 Python 绑定，生产环境主流，
+#   完整支持幂等、事务、再平衡回调与 stats 指标；自带 Apple Silicon 预编译 wheel。
+# =====================================================================
+confluent-kafka==2.3.0

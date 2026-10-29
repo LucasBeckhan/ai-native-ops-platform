@@ -1,0 +1,37 @@
+# =====================================================================
+# 文件名: docker/docker-compose.llm.yml
+# 所属模块: 基础设施层（Mock LLM Server，全部 Agent 实验的模型后端）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.llm.yml up -d --build
+#   验证: curl http://localhost:18000/healthz
+# 说明:
+#   - 所有 Agent 相关代码（模块 26-34、场景一二的 Agent/Skill/MCP）默认把
+#     OPENAI_BASE_URL 指向 http://mock-llm:8000/v1（容器网络）或
+#     http://localhost:8000/v1（本机进程直跑）。
+#   - 要切换到真实模型：设置环境变量 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+#     即可，代码零改动（模块 27 会实现统一适配层）。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  mock-llm:
+    build:
+      context: ..
+      dockerfile: agent/basics/mock-llm/Dockerfile
+    image: teleops/mock-llm:1.0.0
+    container_name: mock-llm
+    ports:
+      - "${MOCK_LLM_PORT}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - teleops
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

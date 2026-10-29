@@ -1,0 +1,9 @@
+{
+  "name": "config-audit",
+  "version": "1.0.0",
+  "description": "基站配置审计：运行配置差异诊断 → 对照合规基线 → 输出整改清单",
+  "triggers": ["配置", "审计", "基线", "合规", "整改"],
+  "permissions": ["read"],
+  "tools": ["run_diagnosis"],
+  "author": "teleops"
+}

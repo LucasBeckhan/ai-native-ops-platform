@@ -1,0 +1,130 @@
+# =====================================================================
+# 文件名: k8s/advanced/02-ingress-lab/ingress-nginx-kind.yaml
+# 说明: 精简版 ingress-nginx 部署（kind 集群、离线镜像、无 admission webhook）。
+#       官方 deploy.yaml 的裁剪版：保留 SA/RBAC/ConfigMap/Deployment/Service，
+#       去掉 certgen Job 与 ValidatingWebhook（教学实验不需要）。
+# 运行: kubectl apply -f ingress-nginx-kind.yaml
+# =====================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+  name: ingress-nginx
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ingress-nginx
+  namespace: ingress-nginx
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ingress-nginx
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, endpoints, nodes, pods, secrets, namespaces]
+    verbs: [list, watch, get]
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses/status]
+    verbs: [update]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ingress-nginx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ingress-nginx
+subjects:
+  - kind: ServiceAccount
+    name: ingress-nginx
+    namespace: ingress-nginx
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+data:
+  allow-snippet-annotations: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: ingress-nginx}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: ingress-nginx}
+    spec:
+      serviceAccountName: ingress-nginx
+      containers:
+        - name: controller
+          # 离线环境关键：本地缓存镜像已 kind load 注入节点
+          image: registry.k8s.io/ingress-nginx/controller:v1.11.3
+          args:
+            - /nginx-ingress-controller
+            - --election-id=ingress-nginx-leader
+            - --controller-class=k8s.io/ingress-nginx
+            - --ingress-class=nginx
+            - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
+            # 精简部署未启用 admission webhook：证书挂载与以下三个参数一并省略
+            - --watch-ingress-without-class=true   # 兼容未标注 ingressClassName 的规则
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - name: POD_IP
+              valueFrom: {fieldRef: {fieldPath: status.podIP}}
+          ports:
+            - {name: http, containerPort: 80}
+            - {name: https, containerPort: 443}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 10254}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /healthz, port: 10254}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 90Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  # kind 未映射 80 端口时用 NodePort 对外验证（宿主机 curl localhost:30080）
+  type: NodePort
+  ports:
+    - {name: http, port: 80, nodePort: 30080}
+    - {name: https, port: 443, nodePort: 30443}
+  selector: {app.kubernetes.io/name: ingress-nginx}

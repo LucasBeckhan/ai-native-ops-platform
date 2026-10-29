@@ -1,0 +1,81 @@
+# =====================================================================
+# 文件名: docker/docker-compose.flink.yml
+# 所属模块: 基础设施层（模块 18/19/20 Flink 全系列、场景一/二实时计算层）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.flink.yml up -d
+#   Web UI: http://localhost:8081
+# 说明:
+#   - 1 个 JobManager + N 个 TaskManager 的 Standalone 会话集群。
+#     学习/实验场景用会话集群最直观（先起集群，再 flink run 提交作业）；
+#     生产环境更多用 Per-Job / Application 模式，差异在模块 18 文档中讲解。
+#   - TaskManager 通过 deploy.replicas 控制副本数，16GB 机器建议 2，
+#     8GB 轻量模式启动时加 --scale flink-taskmanager=1。
+#   - 把 bigdata/flink/target 挂载到 /opt/flink/usrlib：
+#     Maven 打包后无需重建容器即可 flink run 提交新 jar。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  flink-jobmanager:
+    image: ${FLINK_IMAGE}
+    container_name: flink-jobmanager
+    command: jobmanager
+    ports:
+      - "${FLINK_UI_PORT}:8081"          # Flink Web UI（提交/监控作业）
+    environment:
+      # FLINK_PROPERTIES 会由入口脚本追加写入 flink-conf.yaml
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.memory.process.size: 768m
+        # 每个 TaskManager 提供的 Slot 数：实验机器资源有限设为 2
+        taskmanager.numberOfTaskSlots: 2
+        # 开启 Web UI 火焰图，排查 CPU 热点（模块 20 反压分析会用到）
+        rest.flamegraph.enabled: true
+        # Checkpoint 落盘目录：容器内路径，作业配置中会用 state.checkpoints.dir 引用
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/savepoints
+    mem_limit: 1024m
+    volumes:
+      - flink-checkpoints:/opt/flink/checkpoints
+      - flink-savepoints:/opt/flink/savepoints
+      # Maven 打包产物目录（mvn -pl flink package 后生成）
+      - ../bigdata/flink/target:/opt/flink/usrlib
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/overview >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - teleops
+
+  flink-taskmanager:
+    image: ${FLINK_IMAGE}
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.memory.process.size: 768m
+        taskmanager.numberOfTaskSlots: 2
+        # TaskManager 内存分块：本地实验压缩为小内存模型（生产应按公式规划，见模块 20）
+        taskmanager.memory.process.size: 1024m
+        taskmanager.memory.network.fraction: 0.1
+    deploy:
+      replicas: ${FLINK_TASKMANAGER_REPLICAS:-2}
+    mem_limit: 1280m
+    volumes:
+      - ../bigdata/flink/target:/opt/flink/usrlib
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    networks:
+      - teleops
+
+volumes:
+  flink-checkpoints:
+  flink-savepoints:
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

@@ -1,0 +1,155 @@
+# =====================================================================
+# 文件名: docker/docker-compose.kafka.yml
+# 所属模块: 基础设施层（模块 15/16/17 Kafka 全系列依赖）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.kafka.yml up -d
+#   一键启动（含其他服务）请使用 docker-compose.all.yml
+# 说明:
+#   - 三节点 Kafka 集群，KRaft 模式（无 ZooKeeper）。KRaft 是 Kafka 3.3+ 的
+#     主流部署形态，也是当前面试高频考点，因此本项目所有实验基于 KRaft。
+#   - 选用 apache/kafka 官方镜像：多架构（Apple Silicon 可用）、官方维护、
+#     环境变量直配（无需 bitnami 的 KAFKA_CFG_ 前缀）。
+#   - 每个节点同时承担 broker + controller 角色（combined 模式），这是
+#     KRaft 三节点小集群的标准做法；生产大规模集群建议 controller 独立部署。
+#   - 对外（宿主机）端口 39092/39093/39094，容器间通过服务名 kafka-1/2/3:9092 通信。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  kafka-1:
+    image: ${KAFKA_IMAGE}
+    container_name: kafka-1
+    ports:
+      - "${KAFKA_EXTERNAL_PORT_1}:29092"   # 宿主机客户端通过 localhost:39092 访问
+    environment:
+      # --- KRaft 元数据集群（三个节点必须一致） ---
+      # CLUSTER_ID 是 22 位 base64url 字符串，标识一个 KRaft 集群
+      CLUSTER_ID: "AiNativeOpsClusterId01"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # --- 监听器：PLAINTEXT 容器间通信用，PLAINTEXT_HOST 供宿主机访问 ---
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-1:9092,PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT_1}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # --- 副本与内部 Topic（三副本集群的推荐配置） ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      # 生产环境应关闭自动建 Topic（面试常考：失控 Topic 会打爆磁盘）
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # 实验环境加速消费组首次再平衡
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # 本地实验限制堆内存，防止吃满宿主机内存
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+    healthcheck:
+      # 用内置脚本检查本节点是否可响应元数据请求
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+    networks:
+      - teleops
+
+  kafka-2:
+    image: ${KAFKA_IMAGE}
+    container_name: kafka-2
+    ports:
+      - "${KAFKA_EXTERNAL_PORT_2}:29092"
+    environment:
+      CLUSTER_ID: "AiNativeOpsClusterId01"
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-2:9092,PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT_2}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+    networks:
+      - teleops
+
+  kafka-3:
+    image: ${KAFKA_IMAGE}
+    container_name: kafka-3
+    ports:
+      - "${KAFKA_EXTERNAL_PORT_3}:29092"
+    environment:
+      CLUSTER_ID: "AiNativeOpsClusterId01"
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-3:9092,PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT_3}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+    networks:
+      - teleops
+
+  # Kafka 可视化管理界面：查看 Topic/消费组 Lag/分区副本分布
+  # 浏览器访问 http://localhost:8980
+  kafka-ui:
+    image: ${KAFKA_UI_IMAGE}
+    container_name: kafka-ui
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_UI_PORT}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "ai-native-ops"
+      # kafka-ui 在容器网络内访问集群时必须用容器间地址（kafka-N:9092）
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+      DYNAMIC_CONFIG_ENABLED: "true"
+    networks:
+      - teleops
+
+volumes:
+  kafka1-data:
+  kafka2-data:
+  kafka3-data:
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

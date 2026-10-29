@@ -1,0 +1,72 @@
+# =====================================================================
+# 文件名: docker/docker-compose.spark.yml
+# 所属模块: 基础设施层（模块 21-24 Spark 全系列、场景二离线分析层）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.spark.yml up -d
+#   Master UI: http://localhost:8085   Worker UI: http://localhost:8086
+# 说明:
+#   - Standalone 模式（1 Master + 1 Worker）。学习场景 Standalone 最容易理解
+#     资源模型（Master 管理资源、Worker 汇报资源、Executor 跑任务）；
+#     Spark on K8s / YARN 的对比与选型在模块 23 文档中详细展开。
+#   - 选用 apache/spark 官方镜像的 python3 变体：PySpark 作业直接
+#     spark-submit 提交 .py 文件，无需先编译，对学习者最友好。
+#   - 作业提交示例（在 master 容器内执行）:
+#     docker exec -it spark-master spark-submit --master spark://spark-master:7077 \
+#       jobs/m22_dataframe_basics.py
+# =====================================================================
+name: ai-native-ops
+
+services:
+  spark-master:
+    image: ${SPARK_IMAGE}
+    container_name: spark-master
+    # v 前缀镜像是 K8s 风格（无 master 包装脚本），用 spark-class 直启
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "${SPARK_MASTER_UI_PORT}:8080"   # Master Web UI（查看 Worker/运行中的应用）
+      - "7077:7077"                       # Master RPC 端口（本机 spark-client 直连用）
+    environment:
+      # Master 堆内存：本地实验用小内存
+      SPARK_MASTER_MEMORY: 1g
+    mem_limit: 1200m
+    volumes:
+      # PySpark 作业脚本目录：提交时引用 jobs/xxx.py 相对路径
+      - ../bigdata/spark/jobs:/opt/spark/work-dir/jobs
+      # 离线分析所需的样例数据（CSV/JSON）
+      - ../bigdata/spark/data:/opt/spark/work-dir/data
+      # 预下载的连接器 jar（Structured Streaming 读 Kafka 用，避免提交时联网下载）
+      - ../bigdata/spark/jars:/opt/spark/work-dir/jars
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - teleops
+
+  spark-worker:
+    image: ${SPARK_IMAGE}
+    container_name: spark-worker-1
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      # Worker 可分配资源：4 核 4GB，可同时跑 2 个小作业
+      SPARK_WORKER_CORES: 4
+      SPARK_WORKER_MEMORY: 4g
+    mem_limit: 4608m
+    volumes:
+      - ../bigdata/spark/jobs:/opt/spark/work-dir/jobs
+      - ../bigdata/spark/data:/opt/spark/work-dir/data
+      - ../bigdata/spark/jars:/opt/spark/work-dir/jars
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    ports:
+      - "${SPARK_WORKER_UI_PORT}:8081"
+    networks:
+      - teleops
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

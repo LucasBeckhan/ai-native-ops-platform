@@ -1,0 +1,83 @@
+# =====================================================================
+# 文件名: docker/docker-compose.milvus.yml
+# 所属模块: 基础设施层（模块 30 RAG 向量库、Agent 长期记忆）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.milvus.yml --profile milvus up -d
+# 说明:
+#   - Milvus standalone（主向量库，生产主流）= milvus + etcd(元数据) + minio(对象存储)。
+#   - 放在 milvus profile 中：向量库仅在 RAG/记忆相关实验时启动，
+#     避免常驻占用 ~1.5GB 内存。
+#   - 轻量替代方案 Chroma 无需容器（pip install chromadb 进程内运行），
+#     模块 30 中两者都会讲到，选型对比见 docs/agent/rag-deep-dive.md。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  milvus-etcd:
+    image: ${ETCD_IMAGE}
+    container_name: milvus-etcd
+    profiles: ["milvus"]
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"   # 4GB 元数据配额
+    command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - milvus-etcd-data:/etcd
+    networks:
+      - teleops
+
+  milvus-minio:
+    image: ${MINIO_IMAGE}
+    container_name: milvus-minio
+    profiles: ["milvus"]
+    environment:
+      MINIO_ACCESS_KEY: minioadmin        # 学习环境固定密钥，生产必须改走密钥管理
+      MINIO_SECRET_KEY: minioadmin
+    command: minio server /minio_data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - milvus-minio-data:/minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - teleops
+
+  milvus-standalone:
+    image: ${MILVUS_IMAGE}
+    container_name: milvus-standalone
+    profiles: ["milvus"]
+    command: ["milvus", "run", "standalone"]
+    depends_on:
+      milvus-etcd:
+        condition: service_started
+      milvus-minio:
+        condition: service_healthy
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+      # 学习环境关闭安全认证；生产必须开启 RBAC + TLS
+      COMMON_STORAGETYPE: remote
+    ports:
+      - "${MILVUS_PORT}:19530"          # gRPC 端口（SDK 连接用）
+      - "${MILVUS_METRICS_PORT}:9091"   # Prometheus 指标端口
+    volumes:
+      - milvus-data:/var/lib/milvus
+    mem_limit: 1500m
+    networks:
+      - teleops
+
+volumes:
+  milvus-etcd-data:
+  milvus-minio-data:
+  milvus-data:
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

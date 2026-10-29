@@ -1,0 +1,11 @@
+# =====================================================================
+# 文件名: telecom/5g-slice-monitor/deploy/helm/Chart.yaml
+# 说明: 场景一 Helm Chart 元数据（values.yaml + templates 把上面的
+#       manifests 参数化：副本数/镜像/资源/环境均可按环境覆盖）。
+# =====================================================================
+apiVersion: v2
+name: teleops-slice
+description: 5G 切片智能监控（KPI 采集 → Flink SLA 告警 → ES → Agent）
+type: application
+version: 0.1.0        # Chart 版本
+appVersion: "1.0.0"   # 应用版本

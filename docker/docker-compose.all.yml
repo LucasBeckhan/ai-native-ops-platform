@@ -1,0 +1,28 @@
+# =====================================================================
+# 文件名: docker/docker-compose.all.yml
+# 所属模块: 基础设施层（一键聚合入口）
+# 运行方式:
+#   cd docker
+#   docker compose -f docker-compose.all.yml up -d          # 标准模式（16GB 机器）
+#   docker compose -f docker-compose.all.yml --profile milvus up -d   # 加向量库
+#   docker compose -f docker-compose.all.yml --profile heavy up -d    # 加 Kibana/Loki
+#   一键停止: docker compose -f docker-compose.all.yml down
+# 说明:
+#   - 使用 compose v2 的 include 指令聚合各子编排文件：每个模块的 compose
+#     仍可独立启动（隔离实验），all.yml 负责“一键全家桶”。
+#   - 所有文件共享网络 teleops-net 与同一组 .env 变量，服务间用服务名互访。
+#   - 轻量模式（8GB 内存）：叠加 override 文件
+#     docker compose -f docker-compose.all.yml -f docker-compose.light.yml up -d
+#     并追加 --scale flink-taskmanager=1
+# =====================================================================
+name: ai-native-ops
+
+include:
+  - docker-compose.kafka.yml
+  - docker-compose.flink.yml
+  - docker-compose.spark.yml
+  - docker-compose.elasticsearch.yml
+  - docker-compose.monitoring.yml
+  - docker-compose.llm.yml
+  # 向量库与日志栈按需启动（profiles: milvus / heavy，见各子文件头部说明）
+  - docker-compose.milvus.yml

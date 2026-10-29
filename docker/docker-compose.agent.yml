@@ -1,0 +1,56 @@
+# =====================================================================
+# 文件名: docker/docker-compose.agent.yml
+# 所属模块: 基础设施层（Agent 服务化：agent-api + MCP Server 容器）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.llm.yml -f docker-compose.agent.yml up -d --build
+#   体验: curl -X POST localhost:8100/chat -H 'Content-Type: application/json' \
+#         -d '{"session_id":"s1","message":"eNB-1024 的告警怎么回事"}'
+# 说明:
+#   - agent-api：模块 29 Harness 的 HTTP 封装（platform/agent-service）。
+#   - mcp-server：模块 29 手写 MCP Server 的 HTTP 形态（容器网络 :8300）。
+#     agent-api 通过 MCP_HTTP_URL 连接它——MCP 的"远程独立部署"形态，
+#     与本地 stdio 形态互为补充。
+#   - 教学取向直接挂载 agent/ 源码（改代码即生效）；生产镜像应 COPY 分层打包。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  mcp-server:
+    image: ${PYTHON_IMAGE}
+    container_name: mcp-server
+    working_dir: /app/agent/mcp/minimal
+    command: python3 mcp_server.py --transport http --port 8300
+    volumes:
+      # 挂载源码与工具依赖（mcp_server 引用 basics/m28-agent-core 的 tools.py）
+      - ../agent:/app/agent:ro
+    ports:
+      - "${MCP_SERVER_PORT}:8300"
+    mem_limit: 256m
+    networks:
+      - teleops
+
+  agent-api:
+    build:
+      context: ..
+      dockerfile: platform/agent-service/Dockerfile
+    image: teleops/agent-api:1.0.0
+    container_name: agent-api
+    depends_on:
+      - mcp-server
+    ports:
+      - "${AGENT_SERVICE_PORT}:8100"
+    environment:
+      MCP_HTTP_URL: http://mcp-server:8300     # 容器网络内的 MCP Server
+      LLM_BASE_URL: http://mock-llm:8000/v1    # 与 mock-llm 容器约定
+      SKILLS_DIR: /app/agent/skills
+      PYTHONPATH: /app/agent/harness/src:/app/agent/basics/m27-llm-adapter:/app/agent/basics/m28-agent-core:/app/agent/skills
+    volumes:
+      - ../agent:/app/agent:ro
+    mem_limit: 512m
+    networks:
+      - teleops
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

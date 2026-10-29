@@ -1,0 +1,18 @@
+# =====================================================================
+# 文件名: docker/monitoring/grafana/provisioning/dashboards/provider.yml
+# 所属模块: 基础设施层（模块 9）
+# 说明: 声明 Grafana Dashboard 提供者——把宿主机 dashboards 目录中的
+#       JSON 文件自动加载为面板，实现“Dashboard 也是代码”。
+# =====================================================================
+apiVersion: 1
+
+providers:
+  - name: teleops-dashboards
+    orgId: 1
+    folder: AI-Native Ops
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      # 容器内路径，compose 已把 ../monitoring/grafana/dashboards 挂载到这里
+      path: /var/lib/grafana/dashboards

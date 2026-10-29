@@ -1,0 +1,31 @@
+# 静态供给三件套（模块 4 实测 Bound）
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: teleops-pv}
+spec:
+  capacity: {storage: 1Gi}
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain     # 释放后保留数据（人工处置）
+  storageClassName: manual
+  hostPath: {path: /tmp/teleops-pv}         # kind 单机教学；生产用 CSI 驱动
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: teleops-pvc}
+spec:
+  storageClassName: manual
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 512Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: pv-consumer}
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["sh", "-c", "echo hello-$(date) > /data/hello.txt && sleep 3600"]
+      volumeMounts: [{name: data, mountPath: /data}]
+  volumes:
+    - name: data
+      persistentVolumeClaim: {claimName: teleops-pvc}

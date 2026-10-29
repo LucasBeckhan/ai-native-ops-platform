@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- =====================================================================
+  文件名: bigdata/flink/pom.xml
+  所属模块: 模块 18/19/20 —— Flink 作业工程（多 MainClass 单工程）
+  构建方式:
+    mvn -f bigdata/flink/pom.xml package
+    产物 bigdata/flink/target/teleops-flink-jobs.jar 被 compose 挂载到
+    /opt/flink/usrlib，在 jobmanager 容器内 flink run 提交。
+  依赖策略（面试考点：provided vs compile）:
+    - Flink 框架类全部 provided：集群 lib 已有（容器镜像自带），
+      打出的是"瘦作业 jar"，与集群版本天然一致，避免依赖冲突。
+    - Kafka 连接器也 provided：镜像构建时已把 flink-sql-connector-kafka
+      放进 /opt/flink/lib（见 docker/flink-local/Dockerfile）。
+    - CEP 在 Flink 1.18 发行包 lib 中自带。
+  编译目标: Java 8（本地 JDK8 可编译，容器内 Java 11/17 可运行——
+    Flink 1.18 支持三者；避免学习者因本地 JDK 版本而被卡住）。
+====================================================================== -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.teleops</groupId>
+  <artifactId>teleops-flink-jobs</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>TeleOps Flink Jobs</name>
+
+  <properties>
+    <flink.version>1.18.1</flink.version>
+    <kafka.connector.version>3.0.2-1.18</kafka.connector.version>
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- Flink 核心：provided（集群 lib 已有，作业 jar 保持精瘦） -->
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-streaming-java</artifactId>
+      <version>${flink.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-clients</artifactId>
+      <version>${flink.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- CEP：复杂事件处理（模块 19） -->
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-cep</artifactId>
+      <version>${flink.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Kafka 连接器：镜像 lib 已内置（provided），本地 IDE 运行时改 compile -->
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-connector-kafka</artifactId>
+      <version>${kafka.connector.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- finalName 固定：compose 挂载与提交命令引用固定文件名 -->
+    <finalName>teleops-flink-jobs</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <!-- 版本钉住：配合宿主 ~/.m2 缓存实现容器内离线构建（见 scripts/build-flink.sh） -->
+        <version>3.2.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <!-- 本工程无测试用例，跳过 surefire（也避免离线构建拉取插件） -->
+        <version>2.22.2</version>
+        <configuration>
+          <skipTests>true</skipTests>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <source>8</source>
+          <target>8</target>
+          <encoding>UTF-8</encoding>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.2.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <!-- 默认主类；提交时也可 -c 显式指定各作业 -->
+              <mainClass>com.teleops.flink.m18.EventTimeWindowJob</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

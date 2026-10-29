@@ -1,0 +1,39 @@
+# =====================================================================
+# 文件名: docker/monitoring/prometheus/prometheus.yml
+# 所属模块: 基础设施层（模块 9 / 17 / 20）
+# 说明: Prometheus 全局配置。Prometheus 的数据模型是“时间序列”：
+#       指标名 + 一组 label(key=value) 唯一确定一条时间序列。
+#       scrape_configs 定义“抓取哪些目标的哪些指标”。
+# =====================================================================
+global:
+  # 每 15 秒抓取一次目标（生产常用 15s~30s；抓取间隔越短，时序数据量越大）
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # 抓取 Prometheus 自身的运行指标（内存/TSDB/抓取延迟等），用于自检
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 抓取 Kafka 指标。apache/kafka 官方镜像默认未开启 JMX Exporter，
+  # 开启方法见模块 17（挂载 jmx_prometheus_javaagent.jar 并追加 KAFKA_JMX_OPTS），
+  # 开启后取消下面 targets 的注释即可。
+  - job_name: kafka-jmx
+    static_configs:
+      - targets: ["kafka-1:5556", "kafka-2:5556", "kafka-3:5556"]
+
+  # Flink 通过 Prometheus Reporter 暴露 9250 端口指标（开启方法见模块 20）
+  - job_name: flink
+    static_configs:
+      - targets: ["flink-jobmanager:9250"]
+
+  # Mock LLM / Agent 服务通过 /metrics 暴露调用量、Token 消耗（模块 33）
+  - job_name: agent-services
+    static_configs:
+      - targets: ["mock-llm:8000", "agent-service:8100", "mcp-server:8300"]
+
+  # Milvus 自带 /metrics 端点（启动 milvus profile 后生效）
+  - job_name: milvus
+    static_configs:
+      - targets: ["milvus-standalone:9091"]

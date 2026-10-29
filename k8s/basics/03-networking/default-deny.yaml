@@ -1,0 +1,8 @@
+# 默认拒绝策略（模块 3）：白名单式网络治理的起点。
+# 注意：kindnet 不强制 NetworkPolicy；强制需 Calico/Cilium（生产 CNI 选型考题）
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-ingress, namespace: default}
+spec:
+  podSelector: {}          # 选中本 ns 全部 Pod
+  policyTypes: [Ingress]   # 无 ingress 规则 = 全部拒绝

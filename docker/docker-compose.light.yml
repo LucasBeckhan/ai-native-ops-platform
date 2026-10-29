@@ -1,0 +1,28 @@
+# =====================================================================
+# 文件名: docker/docker-compose.light.yml
+# 所属模块: 基础设施层（8GB 内存轻量模式 override）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.all.yml -f docker-compose.light.yml \
+#     up -d --scale flink-taskmanager=1
+# 说明:
+#   - compose 的 override 机制：多个 -f 文件按顺序合并，后者覆盖前者。
+#   - 轻量模式削减内存上限、关闭非必需 UI，保留全部核心数据链路。
+# =====================================================================
+services:
+  flink-jobmanager:
+    mem_limit: 512m
+  flink-taskmanager:
+    deploy:
+      replicas: 1
+    mem_limit: 900m
+  elasticsearch:
+    environment:
+      ES_JAVA_OPTS: "-Xms256m -Xmx256m"
+    mem_limit: 512m
+  spark-worker:
+    environment:
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+    mem_limit: 2560m
+  kafka-ui:
+    profiles: ["heavy"]    # 轻量模式默认不起 UI，需要时 --profile heavy

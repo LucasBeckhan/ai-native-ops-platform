@@ -1,0 +1,15 @@
+# 可再生产物（脚本重新获取，见 docs/environment-prep.md）
+docker/dist/
+docker/wheels/
+bigdata/spark/jars/
+bigdata/flink/target/
+target/
+*.jar
+*.tgz
+*.tar.gz
+
+# 构建与运行时产物
+__pycache__/
+*.pyc
+*.log
+.DS_Store

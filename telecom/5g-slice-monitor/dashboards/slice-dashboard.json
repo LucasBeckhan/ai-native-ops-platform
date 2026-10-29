@@ -1,0 +1,96 @@
+{
+  "title": "5G 切片智能监控（场景一）",
+  "uid": "teleops-slice-01",
+  "tags": ["teleops", "5g", "slice"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": {"from": "now-30m", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "slice",
+        "type": "query",
+        "datasource": {"type": "elasticsearch", "uid": "es-main"},
+        "query": "telecom-slice-kpi*",
+        "definition": "sliceId",
+        "includeAll": true,
+        "current": {"text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "切片 SLA 违规告警数（15m）",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{
+        "datasource": {"type": "elasticsearch", "uid": "es-main"},
+        "query": "telecom-alerts",
+        "queryType": "count",
+        "refId": "A",
+        "metrics": [{"type": "count", "id": "1"}],
+        "bucketAggs": []
+      }],
+      "fieldConfig": {"defaults": {"thresholds": {
+        "mode": "absolute",
+        "steps": [{"color": "green", "value": null},
+                  {"color": "red", "value": 5}]
+      }}}
+    },
+    {
+      "id": 2,
+      "title": "切片平均吞吐（Mbps）",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+      "datasource": {"type": "elasticsearch", "uid": "es-main"},
+      "targets": [{
+        "datasource": {"type": "elasticsearch", "uid": "es-main"},
+        "query": "telecom-slice-kpi*",
+        "queryType": "lucene",
+        "refId": "A",
+        "metrics": [{"type": "avg", "field": "throughput", "id": "1"}],
+        "bucketAggs": [
+          {"type": "date_histogram", "id": "2", "field": "@timestamp", "interval": "30s"},
+          {"type": "terms", "id": "3", "field": "sliceId"}
+        ]
+      }]
+    },
+    {
+      "id": 3,
+      "title": "uRLLC 切片时延 vs SLA(10ms)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "elasticsearch", "uid": "es-main"},
+      "targets": [{
+        "datasource": {"type": "elasticsearch", "uid": "es-main"},
+        "query": "telecom-slice-kpi* AND sliceId:slice-uRLLC-001",
+        "queryType": "lucene",
+        "refId": "A",
+        "metrics": [{"type": "avg", "field": "latency_ms", "id": "1"}],
+        "bucketAggs": [{"type": "date_histogram", "id": "2", "field": "@timestamp", "interval": "30s"}]
+      }],
+      "fieldConfig": {"defaults": {"thresholds": {
+        "mode": "absolute",
+        "steps": [{"color": "green", "value": null},
+                  {"color": "red", "value": 10}]
+      }}}
+    },
+    {
+      "id": 4,
+      "title": "最近告警列表",
+      "type": "logs",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "datasource": {"type": "elasticsearch", "uid": "es-main"},
+      "targets": [{
+        "datasource": {"type": "elasticsearch", "uid": "es-main"},
+        "query": "telecom-alerts",
+        "queryType": "lucene",
+        "refId": "A",
+        "metrics": [{"type": "logs", "id": "1"}],
+        "bucketAggs": []
+      }]
+    }
+  ]
+}

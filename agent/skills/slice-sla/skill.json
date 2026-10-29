@@ -1,0 +1,10 @@
+{
+  "name": "slice-sla",
+  "version": "1.0.0",
+  "description": "切片 SLA 分析：查询平台告警与 KPI 数据 → 对照 SLA 阈值判定违规 → 输出违规报告与处置建议",
+  "triggers": ["SLA", "sla", "违规", "切片质量", "切片报告"],
+  "permissions": ["read"],
+  "tools": ["es_query_alerts", "query_kpis"],
+  "author": "teleops",
+  "说明": "场景一的核心 Skill：封装 'ES 检索 + KPI 查询 + SLA 判定 + 报告' 的完整流程"
+}

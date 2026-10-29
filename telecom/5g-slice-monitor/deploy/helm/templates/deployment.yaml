@@ -1,0 +1,69 @@
+{{/* 场景一 Helm 模板：Flink JM/TM 与生成器（values 参数化） */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-flink-jm
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: {{ .Release.Name }}-flink, role: jobmanager}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-flink, role: jobmanager}
+    spec:
+      containers:
+        - name: jobmanager
+          image: {{ .Values.flink.image }}
+          command: ["/opt/flink/bin/standalone-job.sh", "start-foreground"]
+          args: ["--job-classname", "com.teleops.flink.m19.KafkaKpiAlertJob"]
+          env:
+            - name: BOOTSTRAP
+              value: {{ .Values.kafkaBootstrap | quote }}
+          resources: {{- toYaml .Values.flink.jobmanager.resources | nindent 12 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-flink-tm
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.flink.taskmanager.replicas }}
+  selector:
+    matchLabels: {app: {{ .Release.Name }}-flink, role: taskmanager}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-flink, role: taskmanager}
+    spec:
+      containers:
+        - name: taskmanager
+          image: {{ .Values.flink.image }}
+          command: ["/opt/flink/bin/taskmanager.sh", "start-foreground"]
+          env:
+            - name: FLINK_PROPERTIES
+              value: |
+                jobmanager.rpc.address: {{ .Release.Name }}-flink-jm
+                taskmanager.numberOfTaskSlots: {{ .Values.flink.taskmanager.slots }}
+          resources: {{- toYaml .Values.flink.taskmanager.resources | nindent 12 }}
+{{- if .Values.generator.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-generator-hpa
+  namespace: {{ .Release.Namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-generator
+  minReplicas: {{ .Values.generator.hpa.minReplicas }}
+  maxReplicas: {{ .Values.generator.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.generator.hpa.cpuTarget }}
+{{- end }}

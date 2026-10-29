@@ -1,0 +1,23 @@
+# =====================================================================
+# 文件名: docker/monitoring/grafana/provisioning/datasources/datasource.yml
+# 所属模块: 基础设施层（模块 9）
+# 说明: Grafana “配置即代码”（provisioning）：容器启动时自动注册数据源，
+#       替代手工在 UI 上点选。生产环境推荐把这类配置纳入 Git 管理。
+# =====================================================================
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prom-main
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s     # 与 Prometheus 抓取间隔一致，避免查询粒度失真
+  - name: Loki
+    type: loki
+    uid: loki-main
+    access: proxy
+    url: http://loki:3100
+    # Loki 属 heavy profile，数据源指向的地址不存在时 Grafana 会显示红点，不影响使用

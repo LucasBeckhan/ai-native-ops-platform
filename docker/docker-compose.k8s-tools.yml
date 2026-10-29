@@ -1,0 +1,41 @@
+# =====================================================================
+# 文件名: docker/docker-compose.k8s-tools.yml
+# 所属模块: 基础设施层（K8s 模块 1-14 的客户端工具环境）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.k8s-tools.yml run --rm k8s-tools bash
+# 说明:
+#   - 提供 kubectl + helm + kind 一体的工具容器：学习者无需在本机安装
+#     任何 K8s 客户端工具，进容器即用。
+#   - 挂载宿主机 docker.sock：容器内执行 `kind create cluster` 时，kind
+#     实际调用宿主机 Docker 创建“节点容器”，这是本地跑 K8s 最轻量的方式。
+#   - K8s 集群本身无法用 docker-compose 部署（compose 编排的是容器不是
+#     节点），因此 K8s 模块的运行载体是 kind 集群 + YAML manifests，
+#     每个模块的 lab 文档会给出 kind 集群的创建与销毁命令。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  k8s-tools:
+    image: ${K8S_TOOLS_IMAGE}
+    container_name: k8s-tools
+    stdin_open: true
+    tty: true
+    volumes:
+      # kind 通过该 socket 驱动宿主机 Docker 创建集群节点
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 持久化 kind 集群配置与 kubeconfig（容器销毁配置仍在）
+      - ../k8s:/workspace/k8s:ro
+      - kind-home:/root/.kube
+      - kind-config:/root/.config
+    working_dir: /workspace
+    networks:
+      - teleops
+
+volumes:
+  kind-home:
+  kind-config:
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

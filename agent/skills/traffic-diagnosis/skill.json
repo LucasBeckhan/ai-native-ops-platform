@@ -1,0 +1,9 @@
+{
+  "name": "traffic-diagnosis",
+  "version": "1.0.0",
+  "description": "切片流量诊断：查询切片 KPI → 对照 SLA 阈值判定 → 输出劣化分析与建议",
+  "triggers": ["流量", "KPI", "吞吐", "时延", "切片", "丢包"],
+  "permissions": ["read"],
+  "tools": ["query_kpis"],
+  "author": "teleops"
+}

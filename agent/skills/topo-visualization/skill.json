@@ -1,0 +1,9 @@
+{
+  "name": "topo-visualization",
+  "version": "1.0.0",
+  "description": "拓扑可视化：查询网元与服务链状态 → 生成 ASCII 拓扑图与状态标注（供终端/Grafana 注释消费）",
+  "triggers": ["拓扑", "组网", "服务链状态", "topology"],
+  "permissions": ["read"],
+  "tools": ["run_diagnosis", "list_blocked_ips"],
+  "author": "teleops"
+}

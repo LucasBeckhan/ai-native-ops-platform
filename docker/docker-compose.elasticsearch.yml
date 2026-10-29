@@ -1,0 +1,61 @@
+# =====================================================================
+# 文件名: docker/docker-compose.elasticsearch.yml
+# 所属模块: 基础设施层（模块 19/20 实时告警存储、场景一/二告警检索层）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.elasticsearch.yml up -d
+#   验证: curl http://localhost:9200
+# 说明:
+#   - 单节点 ES 8.12，为学习环境关闭安全认证（xpack.security.enabled=false），
+#     生产环境必须开启 TLS + 密码认证 + 基于角色的访问控制（RBAC）。
+#   - 堆内存 512m（.env 中 ES_JAVA_OPTS 可调），轻量模式降到 256m。
+#   - Kibana 放在 heavy profile 中：日常实验直接用 curl + Grafana 即可，
+#     需要时 --profile heavy 启动，节省内存。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  elasticsearch:
+    image: ${ES_IMAGE}
+    container_name: elasticsearch
+    ports:
+      - "${ES_HTTP_PORT}:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      # 单节点学习环境关闭副本健康检查（yellow 不影响使用）
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS}
+    mem_limit: 1g
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - teleops
+
+  # Kibana（可选）：DSL 调试、索引管理可视化
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.2
+    container_name: kibana
+    profiles: ["heavy"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    mem_limit: 1g
+    networks:
+      - teleops
+
+volumes:
+  es-data:
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge

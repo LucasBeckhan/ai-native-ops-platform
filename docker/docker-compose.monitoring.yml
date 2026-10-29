@@ -1,0 +1,70 @@
+# =====================================================================
+# 文件名: docker/docker-compose.monitoring.yml
+# 所属模块: 基础设施层（模块 9 可观测性、模块 17/20 大数据监控）
+# 运行方式:
+#   cd docker && docker compose -f docker-compose.monitoring.yml up -d
+#   Grafana: http://localhost:3000 (admin/admin)   Prometheus: http://localhost:9090
+# 说明:
+#   - Prometheus 拉取（pull）指标 + Grafana 展示，是可观测性的指标支柱。
+#   - Loki 为可选组件（heavy profile）：日志方案 EFK vs Loki 的对比与选型
+#     在模块 9 中展开，Loki 常驻内存较大所以默认不启动。
+#   - 数据源通过 provisioning 自动注入 Grafana，无需手工配置。
+# =====================================================================
+name: ai-native-ops
+
+services:
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      # 保留 7 天，本地实验足够
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    mem_limit: 768m
+    networks:
+      - teleops
+
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin      # 学习环境默认账密，生产必须接入 SSO/OAuth
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    mem_limit: 512m
+    networks:
+      - teleops
+
+  # Loki（可选）：日志聚合，Grafana 内直接查询
+  loki:
+    image: ${LOKI_IMAGE}
+    container_name: loki
+    profiles: ["heavy"]
+    ports:
+      - "${LOKI_PORT}:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    mem_limit: 768m
+    networks:
+      - teleops
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  teleops:
+    name: teleops-net
+    driver: bridge
